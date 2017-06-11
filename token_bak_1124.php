@@ -9,7 +9,48 @@ if(isset($_GET['echostr']))
 }
 else
 {
-	$wechatObj->responseMsg();
+
+    if(isset($_POST['room']))
+    {
+	//echo $_POST;
+        $room = $_POST['room'];
+        $i = $_POST['i'];
+        $num = $_POST['num'];
+        $servername = "123.206.16.59";
+        $username = "root";
+        $password = "qwerasdf";
+        $dbname = "WX_User";
+
+        $conn = new mysqli($servername, $username, $password, $dbname);
+
+        if ($conn->connect_error)
+        {
+            die("连接失败: " . $conn->connect_error);
+        }
+        $qry = "select alias,spot,theme from content where room = ".$room;
+        $result = $conn->query($qry);
+
+        $out_time=array("周一8:00~12:00","周一12:00~17:00","周一17:00~21:00","周二8:00~12:00","周二12:00~17:00","周二17:00~21:00",
+    "周三8:00~12:00","周三12:00~17:00","周三17:00~21:00", "周四8:00~12:00","周四12:00~17:00","周四17:00~21:00",
+    "周五8:00~12:00","周五12:00~17:00","周五17:00~21:00","周六8:00~12:00","周六12:00~17:00","周六17:00~21:00",
+    "周日8:00~12:00","周日12:00~17:00","周日17:00~21:00",);
+        while($row = $result->fetch_array(MYSQLI_BOTH))
+        {
+            $openid = $row['alias'];
+            $theme = $row['theme'];
+            $spot = $row['spot'];
+		//echo $openid,$theme,$spot;
+		//echo $openid;
+            $wechatObj->SendTemplateMsg($openid, $out_time[$i], $num, $theme, $spot);
+        }
+
+        $conn->close();
+
+    }
+    else
+    {
+        $wechatObj->responseMsg();
+    }
 }
 
 class wechatCallbackapiTest
@@ -25,9 +66,12 @@ class wechatCallbackapiTest
         }
     }
 
+    /**
+     *
+     */
     public function responseMsg()
     {
-		//get post data, May be due to the different environments
+		//get post data, May be due to the differenxt environments
 		$postStr = $GLOBALS["HTTP_RAW_POST_DATA"];
 
       	//extract post data
@@ -51,8 +95,74 @@ class wechatCallbackapiTest
 							</xml>";
 				if(!empty( $keyword ))
                 {
-              		$msgType = "text";
-                	$contentStr = "----Party Notice----
+					//if(is_int($keyword) && $keyword > 999 && $keyword < 10000)
+                    //if(is_numeric($keyword) && int($keyword) > 999 && int($keyword) < 10000)
+                    if(is_numeric($keyword))
+             {
+                        $servername = "123.206.16.59";
+                        $username = "root";
+                        $password = "qwerasdf";
+                        $dbname = "WX_User";
+                        $conn = new mysqli($servername, $username, $password, $dbname);
+
+            $contentStr = "";
+
+                        if ($conn->connect_error) {
+                            die("连接失败: " . $conn->connect_error);
+                        }
+            //echo "hello";
+                        $qry = "select alias,Max_Peo from content where room = " . $keyword;
+                        $result = $conn->query($qry);
+                        $maxpeople = 0;
+                        $openid_count = 0;
+                        $alreadyin = 0;
+                        while($row = $result->fetch_array(MYSQLI_BOTH))
+                        {
+                            $maxpeople = $row["Max_Peo"];
+                            ++$openid_count;
+                if($row["alias"] == $fromUsername)
+                {
+                $alreadyin = 1;
+
+                }
+                //echo $alreadyin;
+                //echo </br>;
+                            //$contentStr += $row;
+                //var_dump($row["alias"]);
+                //var_dump($row["Max_Peo"]);
+                        }
+            //echo $fromUsername;
+            if(($openid_count < $maxpeople) && ($alreadyin == 0) )
+            {
+                $contentStr = "<a href='http://www.buptparty.cn/back-end/weui-master/dist/example/ssr_front.php?room=".$keyword."&openid=".$fromUsername."'>welcome to this room</a>";
+            }
+            else if($alreadyin ==1)
+            {
+                //echo "2";
+                $contentStr = "You've already in this room";
+/*
+            $openid = $fromUsername;
+            $theme = "ball";
+            $spot = "beijing";
+		$num = 4;
+		//echo $openid,$theme,$spot;
+            $this->SendTemplateMsg($openid, "morning", $num, $theme, $spot);
+*/		
+            }
+            else
+            {
+                //echo "3";
+                $contentStr = "The room is full";
+            }
+                        //$contentStr += $openid_count;
+            $msgType = "text";
+            $resultStr = sprintf($textTpl, $fromUsername, $toUsername, $time, $msgType, $contentStr);
+            echo $resultStr;
+                    }
+					else
+					{
+						$msgType = "text";
+						$contentStr = "----Party Notice----
 
 
 *Press the 'Let's Party' button to create a room;
@@ -61,13 +171,14 @@ class wechatCallbackapiTest
 
 
 -------------------";
-                	$resultStr = sprintf($textTpl, $fromUsername, $toUsername, $time, $msgType, $contentStr);
-                	echo $resultStr;
-                }else{
-                	echo "Input something...";
+						$resultStr = sprintf($textTpl, $fromUsername, $toUsername, $time, $msgType, $contentStr);
+						echo $resultStr;
+					}
                 }
 
-        }else {
+        }
+		else
+		{
         	echo "";
         	exit;
         }
@@ -165,6 +276,42 @@ class wechatCallbackapiTest
 	$u = "http://www.baidu.com";
         //header('location:'.$url);
 	header('location:'.$u);
+    }
+    public function SendTemplateMsg($openid, $time, $num, $theme, $spot)
+    {
+        $access_token = $this->Get_Access_Token();
+	echo $openid,$time,$num,$theme,$spot;
+        $url = "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=".$access_token;
+        $data=array(
+            'touser'=>urlencode($openid),
+
+            'template_id'=>'2KHulnHJOWroFRY3a_7nGG4MW-fTEtpKKvInSyLHPKM',
+
+            //'url'=>"http://www.buptparty.cn",
+            'data'=>array(
+                'time'=>array(
+			      'value'=>$time,
+			      'color'=>"#00008B"
+			     ),
+                'num'=>array(
+		             'value'=>urlencode($num),
+			     'color'=>"#00008B"
+			    ),
+                'theme'=>array(
+			       'value'=>$theme,
+			       'color'=>"#00008B",
+			      ),
+                'spot'=>array(
+			      'value'=>$spot,
+			      'color'=>"#00008B",
+			     ),
+            )
+        );
+	//var_dump($data);
+        $postjson = json_encode($data);
+        $output = $this->https_request($url,$postjson);
+	var_dump($output);
+	echo "\n";
     }
 }
 
